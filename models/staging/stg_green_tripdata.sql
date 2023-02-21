@@ -1,5 +1,12 @@
 {{ config(materialized='view') }}
 
+with tripdata as
+(
+    SELECT *
+        , ROW_NUMBER() OVER (PARTITION BY CAST(VendorID AS integer), lpep_pickup_datetime) AS rn
+    FROM {{ source('staging', 'green_tripdata') }}
+    WHERE vendorid IS NOT NULL
+)
 SELECT 
     {{ dbt_utils.surrogate_key(['vendorid','lpep_pickup_datetime']) }} as tripid,
     cast(vendorid as integer) as vendorid,
@@ -29,8 +36,8 @@ SELECT
     cast(payment_type as integer) as payment_type,
     {{ get_payment_type_description('payment_type') }} as payment_type_description,
     cast(congestion_surcharge as numeric) as congestion_surcharge
-FROM {{ source('staging', 'green_tripdata') }}
-WHERE vendorid IS NOT NULL
+FROM tripdata
+WHERE rn = 1
 -- dbt var: is_test_run
 {% if var('is_test_run', default=true) %}
     
